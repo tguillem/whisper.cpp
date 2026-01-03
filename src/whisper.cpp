@@ -6963,20 +6963,6 @@ int whisper_full_with_state(
     }
     state->exp_n_audio_ctx = params.audio_ctx;
 
-    // these tokens determine the task that will be performed
-    std::vector<whisper_token> prompt_init = { whisper_token_sot(ctx), };
-
-    if (whisper_is_multilingual(ctx)) {
-        const int lang_id = whisper_lang_id(params.language);
-        state->lang_id = lang_id;
-        prompt_init.push_back(whisper_token_lang(ctx, lang_id));
-        if (params.translate) {
-            prompt_init.push_back(whisper_token_translate(ctx));
-        } else {
-            prompt_init.push_back(whisper_token_transcribe(ctx));
-        }
-    }
-
     // first release distilled models require the "no_timestamps" token
     {
         const bool is_distil = ctx->model.hparams.n_text_layer == 2 && ctx->model.hparams.n_vocab != 51866;
@@ -6986,9 +6972,8 @@ int whisper_full_with_state(
         }
     }
 
-    if (params.no_timestamps) {
-        prompt_init.push_back(whisper_token_not(ctx));
-    }
+    std::vector<whisper_token> prompt_init;
+    bool prompt_init_built = false;
 
     int seek = seek_start;
 
@@ -7040,6 +7025,29 @@ int whisper_full_with_state(
         if (seek > seek_start && seek + 500 >= seek_end) {
             prompt_past0.clear();
             prompt_past1.clear();
+        }
+
+        // build prompt_init on first iteration (after encode)
+        if (!prompt_init_built) {
+            prompt_init_built = true;
+
+            // these tokens determine the task that will be performed
+            prompt_init.push_back(whisper_token_sot(ctx));
+
+            if (whisper_is_multilingual(ctx)) {
+                const int lang_id = whisper_lang_id(params.language);
+                state->lang_id = lang_id;
+                prompt_init.push_back(whisper_token_lang(ctx, lang_id));
+                if (params.translate) {
+                    prompt_init.push_back(whisper_token_translate(ctx));
+                } else {
+                    prompt_init.push_back(whisper_token_transcribe(ctx));
+                }
+            }
+
+            if (params.no_timestamps) {
+                prompt_init.push_back(whisper_token_not(ctx));
+            }
         }
 
         int best_decoder_id = 0;
