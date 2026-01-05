@@ -8179,6 +8179,17 @@ float whisper_full_get_token_p(struct whisper_context * ctx, int i_segment, int 
     return ctx->state->result_all[i_segment].tokens[i_token].p;
 }
 
+int whisper_full_get_prompt_past_from_state(struct whisper_state * state, whisper_token * tokens_out, int max_tokens) {
+    const int n = std::min((int)state->prompt_past1.size(), max_tokens);
+    /* Copy from end of prompt_past1 (most recent tokens) */
+    memcpy(tokens_out, state->prompt_past1.data() + state->prompt_past1.size() - n, n * sizeof(whisper_token));
+    return n;
+}
+
+int whisper_full_get_prompt_past(struct whisper_context * ctx, whisper_token * tokens_out, int max_tokens) {
+    return whisper_full_get_prompt_past_from_state(ctx->state, tokens_out, max_tokens);
+}
+
 float whisper_full_get_segment_no_speech_prob(struct whisper_context * ctx, int i_segment) {
     return ctx->state->result_all[i_segment].no_speech_prob;
 }

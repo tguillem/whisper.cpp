@@ -692,6 +692,11 @@ extern "C" {
     WHISPER_API int64_t whisper_full_get_vad_segment_t1           (struct whisper_context * ctx, int i);
     WHISPER_API int64_t whisper_full_get_vad_segment_t1_from_state(struct whisper_state * state, int i);
 
+    // Get the prompt context tokens (prompt_past1) for passing to subsequent whisper_full calls
+    // Returns the number of tokens copied to tokens_out (up to max_tokens)
+    WHISPER_API int whisper_full_get_prompt_past           (struct whisper_context * ctx, whisper_token * tokens_out, int max_tokens);
+    WHISPER_API int whisper_full_get_prompt_past_from_state(struct whisper_state * state, whisper_token * tokens_out, int max_tokens);
+
     //
     // Voice Activity Detection (VAD)
     //
