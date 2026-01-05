@@ -481,6 +481,18 @@ extern "C" {
                              float * logits,
                               void * user_data);
 
+    // Context callback
+    // Called once before decoding starts to inject external context (prompt tokens + language)
+    // Returns number of tokens written to tokens_out (0 if none)
+    // If *lang_id_out is set to >= 0, it overrides params.language
+    typedef int (*whisper_context_callback)(
+            struct whisper_context * ctx,
+              struct whisper_state * state,
+                     whisper_token * tokens_out,
+                               int   max_tokens,
+                               int * lang_id_out,
+                              void * user_data);
+
     // Parameters for the whisper_full() function
     // If you change the order or add new parameters, make sure to update the default values in whisper.cpp:
     // whisper_full_default_params()
@@ -577,6 +589,10 @@ extern "C" {
         // called by each decoder to filter obtained logits
         whisper_logits_filter_callback logits_filter_callback;
         void * logits_filter_callback_user_data;
+
+        // called once to inject external context
+        whisper_context_callback context_callback;
+        void * context_callback_user_data;
 
         const whisper_grammar_element ** grammar_rules;
         size_t                           n_grammar_rules;

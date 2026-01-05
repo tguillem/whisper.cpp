@@ -5980,6 +5980,9 @@ struct whisper_full_params whisper_full_default_params(enum whisper_sampling_str
         /*.logits_filter_callback           =*/ nullptr,
         /*.logits_filter_callback_user_data =*/ nullptr,
 
+        /*.context_callback           =*/ nullptr,
+        /*.context_callback_user_data =*/ nullptr,
+
         /*.grammar_rules   =*/ nullptr,
         /*.n_grammar_rules =*/ 0,
         /*.i_start_rule    =*/ 0,
@@ -6822,7 +6825,8 @@ int whisper_full_with_state(
     }
 
     // auto-detect language if not specified
-    if (params.language == nullptr || strlen(params.language) == 0 || strcmp(params.language, "auto") == 0 || params.detect_language) {
+    if (params.context_callback == NULL
+     && (params.language == nullptr || strlen(params.language) == 0 || strcmp(params.language, "auto") == 0 || params.detect_language)) {
         std::vector<float> probs(whisper_lang_max_id() + 1, 0.0f);
 
         const auto lang_id = whisper_lang_auto_detect_with_state(ctx, state, 0, params.n_threads, probs.data());
@@ -7030,6 +7034,24 @@ int whisper_full_with_state(
         // build prompt_init on first iteration (after encode)
         if (!prompt_init_built) {
             prompt_init_built = true;
+
+            // call context callback to inject external context (prompt tokens + language)
+            if (params.context_callback) {
+                std::vector<whisper_token> ctx_tokens(max_prompt_ctx);
+                int ctx_lang_id = -1;  // -1 means keep params.language
+                const int n_ctx = params.context_callback(ctx, state, ctx_tokens.data(),
+                                                          max_prompt_ctx, &ctx_lang_id, params.context_callback_user_data);
+                if (n_ctx > 0) {
+                    WHISPER_LOG_INFO("%s: context callback returned %d tokens\n", __func__, n_ctx);
+                    for (int i = 0; i < n_ctx; ++i) {
+                        prompt_past1.push_back(ctx_tokens[i]);
+                    }
+                }
+                if (ctx_lang_id >= 0) {
+                    WHISPER_LOG_INFO("%s: context callback set language to %s\n", __func__, whisper_lang_str(ctx_lang_id));
+                    params.language = whisper_lang_str(ctx_lang_id);
+                }
+            }
 
             // these tokens determine the task that will be performed
             prompt_init.push_back(whisper_token_sot(ctx));
@@ -7838,6 +7860,9 @@ int whisper_full_parallel(
 
         params_cur.progress_callback = nullptr;
         params_cur.progress_callback_user_data = nullptr;
+
+        params_cur.context_callback = nullptr;
+        params_cur.context_callback_user_data = nullptr;
 
         workers[i] = std::thread(whisper_full_with_state, ctx, states[i], std::move(params_cur), samples + start_samples, n_samples_cur);
     }
