@@ -7829,6 +7829,10 @@ int whisper_full(
         }
         samples = vad_samples.data();
         n_samples = vad_samples.size();
+        if (params.duration_ms > 0) {
+            const int filtered_duration_ms = (n_samples * 1000) / WHISPER_SAMPLE_RATE;
+            params.duration_ms = std::min(params.duration_ms, filtered_duration_ms);
+        }
     }
     return whisper_full_with_state(ctx, ctx->state, params, samples, n_samples);
 }
@@ -7856,6 +7860,10 @@ int whisper_full_parallel(
         }
         samples = vad_samples.data();
         n_samples = vad_samples.size();
+        if (params.duration_ms > 0) {
+            const int filtered_duration_ms = (n_samples * 1000) / WHISPER_SAMPLE_RATE;
+            params.duration_ms = std::min(params.duration_ms, filtered_duration_ms);
+        }
     }
     int ret = 0;
 
