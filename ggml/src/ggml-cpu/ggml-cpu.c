@@ -2592,6 +2592,7 @@ static bool ggml_thread_apply_priority(int32_t prio) {
 
     int err = setpriority(PRIO_PROCESS, 0, nice_value);
     if (err != 0) {
+        fprintf(stderr, "warn: failed to set thread priority %d (nice %d): %s (%d)\n", prio, nice_value, strerror(errno), errno);
         return false;
     }
 
