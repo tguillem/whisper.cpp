@@ -2621,6 +2621,30 @@ static bool ggml_thread_apply_affinity(const bool * mask) {
 }
 
 static bool ggml_thread_apply_priority(int32_t prio) {
+#ifdef __ANDROID__
+    // On Android, use setpriority() with nice values instead of pthread_setschedparam()
+    // which requires root for SCHED_FIFO
+    int nice_value = 0;
+    switch (prio) {
+        case GGML_SCHED_PRIO_LOW:      nice_value =  10; break; // THREAD_PRIORITY_BACKGROUND
+        case GGML_SCHED_PRIO_NORMAL:   nice_value =   0; break; // THREAD_PRIORITY_DEFAULT
+        case GGML_SCHED_PRIO_MEDIUM:   nice_value =  -2; break; // THREAD_PRIORITY_FOREGROUND
+        case GGML_SCHED_PRIO_HIGH:     nice_value = -16; break; // THREAD_PRIORITY_AUDIO
+        case GGML_SCHED_PRIO_REALTIME: nice_value = -19; break; // THREAD_PRIORITY_URGENT_AUDIO
+    }
+
+    if (prio == GGML_SCHED_PRIO_NORMAL) {
+        // Keep inherited priority
+        return true;
+    }
+
+    int err = setpriority(PRIO_PROCESS, 0, nice_value);
+    if (err != 0) {
+        return false;
+    }
+
+    return true;
+#else
     struct sched_param p;
     int32_t policy = SCHED_OTHER;
     switch (prio) {
@@ -2643,6 +2667,7 @@ static bool ggml_thread_apply_priority(int32_t prio) {
     }
 
     return true;
+#endif
 }
 
 #else // unsupported platforms
