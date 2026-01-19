@@ -334,7 +334,15 @@ compile_count_guard acquire_compile_slot() {
 }
 
 void string_to_spv_func(std::string name, std::string in_path, std::string out_path, std::map<std::string, std::string> defines, bool coopmat, bool dep_file, compile_count_guard slot) {
-    std::string target_env = (name.find("_cm2") != std::string::npos) ? "--target-env=vulkan1.3" : "--target-env=vulkan1.2";
+    std::string target_env;
+#ifdef GGML_VULKAN_MIN_1_1
+    // Vulkan 1.1 compatibility mode: build all non-_cm2 shaders with the 1.1 target.
+    // (RoundingModeRTE is injected into the SPIR-V at pipeline-creation time upstream, so
+    //  no compile-time RTE handling is needed here anymore.)
+    target_env = (name.find("_cm2") != std::string::npos) ? "--target-env=vulkan1.3" : "--target-env=vulkan1.1";
+#else
+    target_env = (name.find("_cm2") != std::string::npos) ? "--target-env=vulkan1.3" : "--target-env=vulkan1.2";
+#endif
 
     #ifdef _WIN32
         std::vector<std::string> cmd = {GLSLC, "-fshader-stage=compute", target_env, "\"" + in_path + "\"", "-o", "\"" + out_path + "\""};
