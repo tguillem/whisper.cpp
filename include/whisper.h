@@ -264,6 +264,9 @@ extern "C" {
                     const char * device,
                     const char * cache_dir);
 
+    // Check if the context is using a GPU or IGPU backend
+    WHISPER_API bool whisper_ctx_is_using_gpu(struct whisper_context * ctx);
+
     // Frees all allocated memory
     WHISPER_API void whisper_free      (struct whisper_context * ctx);
     WHISPER_API void whisper_free_state(struct whisper_state * state);

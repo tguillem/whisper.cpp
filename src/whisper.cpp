@@ -3845,6 +3845,33 @@ void whisper_free_state(struct whisper_state * state) {
     }
 }
 
+bool whisper_ctx_is_using_gpu(struct whisper_context * ctx) {
+    if (!ctx) {
+        return false;
+    }
+
+    if (!ctx->state) {
+        return false;
+    }
+
+    if (ctx->state->backends.empty()) {
+        return false;
+    }
+
+    ggml_backend_t backend = ctx->state->backends[0];
+    if (!backend) {
+        return false;
+    }
+
+    ggml_backend_dev_t dev = ggml_backend_get_device(backend);
+    if (!dev) {
+        return false;
+    }
+
+    enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
+    return dev_type == GGML_BACKEND_DEVICE_TYPE_GPU || dev_type == GGML_BACKEND_DEVICE_TYPE_IGPU;
+}
+
 void whisper_free(struct whisper_context * ctx) {
     if (ctx) {
         for (ggml_context * context : ctx->model.ctxs) {
