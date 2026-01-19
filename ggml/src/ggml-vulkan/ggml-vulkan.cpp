@@ -550,6 +550,8 @@ static constexpr std::initializer_list<std::array<int, 3>> rms_norm_mul_rope_vie
 struct vk_device_struct {
     std::recursive_mutex mutex;
 
+    bool initialization_failed = false;
+
     vk::PhysicalDevice physical_device;
     vk::PhysicalDeviceProperties properties;
     std::string name;
@@ -4487,8 +4489,9 @@ static vk_device ggml_vk_get_device(size_t idx) {
         std::vector<vk::PhysicalDevice> physical_devices = vk_instance.instance.enumeratePhysicalDevices();
 
         if (dev_num >= physical_devices.size()) {
-            std::cerr << "ggml_vulkan: Device with index " << dev_num << " does not exist." << std::endl;
-            throw std::runtime_error("Device not found");
+            device->initialization_failed = true;
+            GGML_LOG_ERROR("Device with index %zu does not exist", dev_num);
+            return nullptr;
         }
 
         device->physical_device = physical_devices[dev_num];
@@ -4600,11 +4603,14 @@ static vk_device ggml_vk_get_device(size_t idx) {
         }
 
         if (!device_is_vulkan_12 && !timeline_semaphore_khr) {
-            throw std::runtime_error("Unsupported device: timeline semaphores required");
+            device->initialization_failed = true;
+            GGML_LOG_ERROR("Unsupported device: timeline semaphores required");
+            return nullptr;
         }
 
         if (!device_is_vulkan_12 && !int8_storage_khr) {
-            throw std::runtime_error("Unsupported device: 8-bit storage required");
+            GGML_LOG_ERROR("Unsupported device: 8-bit storage required");
+            return nullptr;
         }
 
         vk::PhysicalDeviceProperties2 props2;
@@ -5313,7 +5319,9 @@ static vk_device ggml_vk_get_device(size_t idx) {
                 vkGetDeviceProcAddr(device->device, "vkGetBufferDeviceAddressKHR");
 
             if (!device->pfn_vkGetBufferDeviceAddress) {
-                throw std::runtime_error("Failed to load vkGetBufferDeviceAddressKHR");
+                device->initialization_failed = true;
+                GGML_LOG_ERROR("Failed to load vkGetBufferDeviceAddressKHR");
+                return nullptr;
             }
         }
 
@@ -5424,7 +5432,11 @@ static vk_device ggml_vk_get_device(size_t idx) {
         return device;
     }
 
-    return vk_instance.devices[idx];
+    vk_device device = vk_instance.devices[idx];
+    if (device->initialization_failed) {
+        return nullptr;
+    }
+    return device;
 }
 
 static void ggml_vk_print_gpu_info(size_t idx) {
@@ -5849,6 +5861,9 @@ static void ggml_vk_init(ggml_backend_vk_context * ctx, size_t idx) {
     ctx->name = GGML_VK_NAME + std::to_string(idx);
 
     ctx->device = ggml_vk_get_device(idx);
+    if (!ctx->device) {
+        return;
+    }
 
     ctx->semaphore_idx = 0;
     ctx->event_idx = 0;
@@ -13184,6 +13199,9 @@ ggml_backend_buffer_type_t ggml_backend_vk_buffer_type(size_t dev_num) {
     VK_LOG_DEBUG("ggml_backend_vk_buffer_type(" << dev_num << ")");
 
     vk_device dev = ggml_vk_get_device(dev_num);
+    if (!dev) {
+        return nullptr;
+    }
 
     return &dev->buffer_type;
 }
@@ -13259,7 +13277,10 @@ ggml_backend_buffer_type_t ggml_backend_vk_host_buffer_type() {
 
     // Make sure device 0 is initialized
     ggml_vk_instance_init();
-    ggml_vk_get_device(0);
+    vk_device dev = ggml_vk_get_device(0);
+    if (!dev) {
+        return nullptr;
+    }
 
     return &ggml_backend_vk_buffer_type_host;
 }
@@ -14464,6 +14485,11 @@ ggml_backend_t ggml_backend_vk_init(size_t dev_num) {
 
     ggml_backend_vk_context * ctx = new ggml_backend_vk_context;
     ggml_vk_init(ctx, dev_num);
+
+    if (!ctx->device) {
+        delete ctx;
+        return nullptr;
+    }
 
     ggml_backend_t vk_backend = new ggml_backend {
         /* .guid    = */ ggml_backend_vk_guid(),
