@@ -2127,6 +2127,9 @@ struct ggml_backend_vk_context {
     // and set to true after the buffer contents are consumed.
     bool prealloc_x_need_sync, prealloc_y_need_sync, prealloc_split_k_need_sync;
 
+    // Set when pipeline dispatch fails (e.g., shader failed to compile)
+    std::atomic<bool> compute_failed {};
+
     vk_context_ref compute_ctx;
 
     vk_context_ref transfer_ctx;
@@ -7801,6 +7804,12 @@ template <typename T, uint32_t N> const T *push_constant_data(const std::array<T
 
 template <typename T>
 static void ggml_vk_dispatch_pipeline(ggml_backend_vk_context* ctx, vk_context& subctx, vk_pipeline& pipeline, std::initializer_list<vk::DescriptorBufferInfo> const& descriptor_buffer_infos, const T &push_constants, std::array<uint32_t, 3> elements) {
+    if (!pipeline->compiled || !pipeline->pipeline) {
+        GGML_LOG_ERROR("ggml_vulkan: Pipeline %s not compiled, cannot dispatch\n", pipeline->name.c_str());
+        ctx->compute_failed = true;
+        return;
+    }
+
     const uint32_t wg0 = CEIL_DIV(elements[0], pipeline->wg_denoms[0]);
     const uint32_t wg1 = CEIL_DIV(elements[1], pipeline->wg_denoms[1]);
     const uint32_t wg2 = CEIL_DIV(elements[2], pipeline->wg_denoms[2]);
@@ -16425,6 +16434,7 @@ static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cg
     ctx->prealloc_size_add_rms_partials_offset = 0;
     ctx->do_add_rms_partials = false;
     ctx->do_add_rms_partials_offset_calculation = false;
+    ctx->compute_failed = false;
 
     int last_node = cgraph->n_nodes - 1;
 
@@ -16505,6 +16515,10 @@ static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cg
     uint64_t flops_per_submit = std::min(flops_cap, ctx->last_total_flops / 40u);
 
     for (int i = 0; i < cgraph->n_nodes; i++) {
+        if (ctx->compute_failed) {
+            break;
+        }
+
         if (first_node_in_batch) {
             submit_node_idx = i;
         }
@@ -16819,6 +16833,9 @@ static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cg
         ggml_vk_synchronize(ctx);
     }
 
+    if (ctx->compute_failed) {
+        return GGML_STATUS_FAILED;
+    }
     return GGML_STATUS_SUCCESS;
 
     UNUSED(backend);
