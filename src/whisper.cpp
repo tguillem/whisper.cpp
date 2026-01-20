@@ -5197,11 +5197,11 @@ int whisper_vad_segments_n_segments(struct whisper_vad_segments * segments) {
     return segments->data.size();
 }
 
-float whisper_vad_segments_get_segment_t0(struct whisper_vad_segments * segments, int i_segment) {
+int64_t whisper_vad_segments_get_segment_t0(struct whisper_vad_segments * segments, int i_segment) {
     return segments->data[i_segment].start;
 }
 
-float whisper_vad_segments_get_segment_t1(struct whisper_vad_segments * segments, int i_segment) {
+int64_t whisper_vad_segments_get_segment_t1(struct whisper_vad_segments * segments, int i_segment) {
     return segments->data[i_segment].end;
 }
 
