@@ -588,6 +588,7 @@ struct vk_device_struct {
     // Not needed for Vulkan 1.2+ where it's a core function
     PFN_vkGetBufferDeviceAddressKHR pfn_vkGetBufferDeviceAddress = nullptr;
     bool vulkan_memory_model;
+    bool global_priority = false;
 
     bool add_rms_fusion;
     uint32_t partials_binding_alignment;
@@ -4591,6 +4592,11 @@ static vk_device ggml_vk_get_device(size_t idx) {
             } else if (strcmp("VK_EXT_descriptor_indexing", properties.extensionName) == 0) {
                 descriptor_indexing_ext = true;
             }
+#if defined(__ANDROID__)
+            else if (strcmp("VK_EXT_global_priority", properties.extensionName) == 0) {
+                device->global_priority = true;
+            }
+#endif
         }
 
         if (!device_is_vulkan_12 && !timeline_semaphore_khr) {
@@ -4780,14 +4786,34 @@ static vk_device ggml_vk_get_device(size_t idx) {
         const float priorities[] = { 1.0f, 1.0f };
         device->single_queue = compute_queue_family_index == transfer_queue_family_index && queue_family_props[compute_queue_family_index].queueCount == 1;
 
+        // Use low global priority when enabled to reduce UI lag on Android/mobile
+        VkDeviceQueueGlobalPriorityCreateInfoEXT naught_priority_info{};
+        naught_priority_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_EXT;
+        naught_priority_info.pNext = nullptr;
+        naught_priority_info.globalPriority = VK_QUEUE_GLOBAL_PRIORITY_LOW_EXT;
+
         std::vector<vk::DeviceQueueCreateInfo> device_queue_create_infos;
         if (compute_queue_family_index != transfer_queue_family_index) {
-            device_queue_create_infos.push_back({vk::DeviceQueueCreateFlags(), compute_queue_family_index, 1, priorities});
-            device_queue_create_infos.push_back({vk::DeviceQueueCreateFlags(), transfer_queue_family_index, 1, priorities + 1});
+            vk::DeviceQueueCreateInfo compute_queue_info{vk::DeviceQueueCreateFlags(), compute_queue_family_index, 1, priorities};
+            vk::DeviceQueueCreateInfo transfer_queue_info{vk::DeviceQueueCreateFlags(), transfer_queue_family_index, 1, priorities + 1};
+            if (device->global_priority) {
+                compute_queue_info.pNext = &naught_priority_info;
+                transfer_queue_info.pNext = &naught_priority_info;
+            }
+            device_queue_create_infos.push_back(compute_queue_info);
+            device_queue_create_infos.push_back(transfer_queue_info);
         } else if(!device->single_queue) {
-            device_queue_create_infos.push_back({vk::DeviceQueueCreateFlags(), compute_queue_family_index, 2, priorities});
+            vk::DeviceQueueCreateInfo queue_info{vk::DeviceQueueCreateFlags(), compute_queue_family_index, 2, priorities};
+            if (device->global_priority) {
+                queue_info.pNext = &naught_priority_info;
+            }
+            device_queue_create_infos.push_back(queue_info);
         } else {
-            device_queue_create_infos.push_back({vk::DeviceQueueCreateFlags(), compute_queue_family_index, 1, priorities});
+            vk::DeviceQueueCreateInfo queue_info{vk::DeviceQueueCreateFlags(), compute_queue_family_index, 1, priorities};
+            if (device->global_priority) {
+                queue_info.pNext = &naught_priority_info;
+            }
+            device_queue_create_infos.push_back(queue_info);
         }
         vk::DeviceCreateInfo device_create_info;
         std::vector<const char *> device_extensions;
@@ -4963,6 +4989,10 @@ static vk_device ggml_vk_get_device(size_t idx) {
 
         if (device->external_memory_host) {
             device_extensions.push_back("VK_EXT_external_memory_host");
+        }
+
+        if (device->global_priority) {
+            device_extensions.push_back("VK_EXT_global_priority");
         }
 
 #if defined(VK_EXT_shader_64bit_indexing)
