@@ -18105,7 +18105,8 @@ static bool ggml_vk_khr_cooperative_matrix_support(const vk::PhysicalDevicePrope
         }
         return true;
     default:
-        return true;
+        // Mali has no matrix hardware: its emulated coopmat path is 7x slower
+        return driver_props.driverID != vk::DriverId::eArmProprietary;
     }
 }
 
