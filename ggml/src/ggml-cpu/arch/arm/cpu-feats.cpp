@@ -35,7 +35,7 @@ struct aarch64_features {
         uint32_t hwcap2 = getauxval(AT_HWCAP2);
 
         has_dotprod = !!(hwcap & HWCAP_ASIMDDP);
-        has_fp16_va = !!(hwcap & HWCAP_FPHP);
+        has_fp16_va = !!(hwcap & HWCAP_FPHP) && !!(hwcap & HWCAP_ASIMDHP);
         has_sve     = !!(hwcap & HWCAP_SVE);
         has_sve2    = !!(hwcap2 & HWCAP2_SVE2);
         has_i8mm    = !!(hwcap2 & HWCAP2_I8MM);

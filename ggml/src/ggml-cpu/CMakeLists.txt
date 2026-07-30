@@ -174,17 +174,15 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
                     set(ARCH_TAGS "")
                     set(ARCH_DEFINITIONS "")
 
-                    # When a feature is selected, bump the MCPU to the first
-                    # version that supported it
-                    if (GGML_INTERNAL_DOTPROD)
-                        set(ARM_MCPU "armv8.2-a")
-                        set(ARCH_TAGS "${ARCH_TAGS}+dotprod")
-                        list(APPEND ARCH_DEFINITIONS GGML_USE_DOTPROD)
-                    endif()
+                    # Keep optional extensions on the narrowest architectural
+                    # base so unrelated instructions are not enabled.
                     if (GGML_INTERNAL_FP16_VECTOR_ARITHMETIC)
-                        set(ARM_MCPU "armv8.2-a")
                         set(ARCH_TAGS "${ARCH_TAGS}+fp16")
                         list(APPEND ARCH_DEFINITIONS GGML_USE_FP16_VECTOR_ARITHMETIC)
+                    endif()
+                    if (GGML_INTERNAL_DOTPROD)
+                        set(ARCH_TAGS "${ARCH_TAGS}+dotprod")
+                        list(APPEND ARCH_DEFINITIONS GGML_USE_DOTPROD)
                     endif()
                     if (GGML_INTERNAL_SVE)
                         set(ARM_MCPU "armv8.2-a")
